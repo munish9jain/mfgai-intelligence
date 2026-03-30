@@ -1,66 +1,37 @@
 exports.handler = async function(event, context) {
-  const CORS = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
-  if (event.httpMethod === "OPTIONS") return {statusCode:200,headers:CORS,body:""};
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return {statusCode:500,headers:CORS,body:JSON.stringify({error:"API key not configured"})};
+  const C = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
+  if (event.httpMethod === "OPTIONS") return {statusCode:200,headers:C,body:""};
+  const k = process.env.ANTHROPIC_API_KEY;
+  if (!k) return {statusCode:500,headers:C,body:JSON.stringify({error:"API key not configured"})};
 
-  const prompt1 = "Generate exactly 10 manufacturing AI stories, 2 each for these categories: Process Automation, Quality and Inspection, Inventory and Logistics, Predictive Maintenance, Scheduling and Planning. Include stories from Automotive, Food and Beverage, Plastics, Electronics industries. Mix Siemens, Rockwell, FANUC, Cognex, SAP with small shops under 100 employees. Title is the problem solved. Include ROI number. Return only a JSON array starting with [ and ending with ]. No markdown. Each item has: id, title, category, industry, impact, roi, summary, source, tip, tags, searchQ, smallShop, bigCompany";
+  const p1 = "Generate 10 manufacturing AI stories, 1 each for: Process Automation, Quality & Inspection, Inventory & Logistics, Predictive Maintenance, Scheduling & Planning, Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience. Use big companies: Siemens, Rockwell, FANUC, Cognex, SAP, ABB, Honeywell, Emerson, Aveva, Microsoft. Cover industries: Automotive, Food & Beverage, Metals & Fabrication, Electronics. Title is the problem solved. Include ROI. Return ONLY a JSON array. No markdown. Each item: id(1-10),title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(false),bigCompany(company name string)";
 
-  const prompt2 = "Generate exactly 10 manufacturing AI stories, 2 each for these categories: Plant Floor Optimization, Safety and Compliance, Workforce and Training, Energy and Sustainability, Supply Chain Resilience. Include stories from Metals, Pharma, Oil and Gas, Automotive industries. Mix ABB, Honeywell, Emerson, Aveva, Blue Yonder with small shops under 100 employees. Title is the problem solved. Include ROI number. Return only a JSON array starting with [ and ending with ]. No markdown. Each item has: id, title, category, industry, impact, roi, summary, source, tip, tags, searchQ, smallShop, bigCompany";
+  const p2 = "Generate 10 manufacturing AI stories, 1 each for: Process Automation, Quality & Inspection, Inventory & Logistics, Predictive Maintenance, Scheduling & Planning, Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience. Focus on small manufacturers under 100 employees. Cover industries: Plastics & Compounding, Pharma & Medical, Oil Gas & Chemicals, Metals & Fabrication. Title is the problem solved. Include ROI. Return ONLY a JSON array. No markdown. Each item: id(11-20),title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(true),bigCompany(null)";
 
-  function callClaude(prompt) {
-    return fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2500,
-        messages: [{role: "user", content: prompt}]
-      })
-    });
+  function getText(d) {
+    return (d.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
   }
 
-  function parseArticles(text) {
-    var start = text.indexOf("[");
-    var end = text.lastIndexOf("]");
-    if (start === -1 || end === -1) return [];
-    try {
-      return JSON.parse(text.slice(start, end + 1));
-    } catch(e) {
-      return [];
-    }
+  function parse(text) {
+    var t = text.replace(/```json/g,"").replace(/```/g,"").trim();
+    var a = t.indexOf("["), z = t.lastIndexOf("]");
+    if (a<0||z<0) return [];
+    try { return JSON.parse(t.slice(a,z+1)); } catch(e) { return []; }
   }
 
   try {
-    var r1 = await callClaude(prompt1);
-    var r2 = await callClaude(prompt2);
-    var d1 = await r1.json();
-    var d2 = await r2.json();
+    var res = await Promise.all([
+      fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2500,messages:[{role:"user",content:p1}]})}),
+      fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2500,messages:[{role:"user",content:p2}]})})
+    ]);
 
-    var text1 = "";
-    var text2 = "";
-    for (var i = 0; i < (d1.content || []).length; i++) {
-      if (d1.content[i].type === "text") text1 += d1.content[i].text;
-    }
-    for (var j = 0; j < (d2.content || []).length; j++) {
-      if (d2.content[j].type === "text") text2 += d2.content[j].text;
-    }
+    var data = await Promise.all([res[0].json(), res[1].json()]);
+    var articles = parse(getText(data[0])).concat(parse(getText(data[1])));
 
-    var articles1 = parseArticles(text1);
-    var articles2 = parseArticles(text2);
-    var all = articles1.concat(articles2);
+    if (!articles.length) return {statusCode:500,headers:C,body:JSON.stringify({error:"No articles parsed"})};
+    return {statusCode:200,headers:C,body:JSON.stringify({articles:articles,generated:new Date().toISOString()})};
 
-    if (all.length === 0) {
-      return {statusCode:500,headers:CORS,body:JSON.stringify({error:"Parse failed",preview1:text1.slice(0,200),preview2:text2.slice(0,200)})};
-    }
-
-    return {statusCode:200,headers:CORS,body:JSON.stringify({articles:all,generated:new Date().toISOString()})};
-
-  } catch(err) {
-    return {statusCode:500,headers:CORS,body:JSON.stringify({error:err.message})};
+  } catch(e) {
+    return {statusCode:500,headers:C,body:JSON.stringify({error:e.message})};
   }
 };
