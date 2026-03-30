@@ -88,12 +88,13 @@ Rules:
       .join("")
       .trim();
 
-    // DO NOT PARSE HERE – just return raw JSON text for the UI to handle
+    // Just send the text straight through; front‑end will JSON.parse it
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        raw: text
+        articles: text,
+        generated: new Date().toISOString()
       })
     };
   } catch (err) {
