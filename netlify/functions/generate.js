@@ -1,62 +1,166 @@
-i want to take it all to perplexity give me everything that i can copy and take it there
+exports.handler = async function (event, context) {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json"
+  };
 
-12:13 AM
-Smart. Here's everything in one place — copy this entire message and paste it into Perplexity:
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers,
+      body: ""
+    };
+  }
 
-I have a manufacturing AI intelligence website deployed at https://mfgai-intelligence.netlify.app
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: "API key not configured" })
+    };
+  }
 
-The site uses a Netlify serverless function at /netlify/functions/generate.js that calls the Anthropic Claude API to generate manufacturing AI stories. The function keeps failing with either timeout errors or "Unexpected end of JSON input".
+  const prompt = `
+You are a JSON generator for manufacturing AI success stories.
 
-Here is the current generate.js code:
+Return ONLY a valid JSON array of EXACTLY 10 objects, nothing before or after it.
 
-javascript
-exports.handler = async function(event, context) {
-  const C = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
-  if (event.httpMethod === "OPTIONS") return {statusCode:200,headers:C,body:""};
-  const k = process.env.ANTHROPIC_API_KEY;
-  if (!k) return {statusCode:500,headers:C,body:JSON.stringify({error:"API key not configured"})};
-  const p = "List 10 manufacturing AI success stories as a JSON array. One story per category: Process Automation, Quality Inspection, Inventory Logistics, Predictive Maintenance, Scheduling Planning, Plant Optimization, Safety Compliance, Workforce Training, Energy Sustainability, Supply Chain. Each story: id, title, category, industry(array), impact, roi, summary, source, tip, tags(array), searchQ, smallShop(boolean), bigCompany(string). Return only the JSON array.";
+Each object MUST have these fields:
+- id: integer from 1 to 10
+- title: short string (max 80 chars)
+- category: one of:
+  "Process Automation",
+  "Quality Inspection",
+  "Inventory Logistics",
+  "Predictive Maintenance",
+  "Scheduling Planning",
+  "Plant Optimization",
+  "Safety Compliance",
+  "Workforce Training",
+  "Energy Sustainability",
+  "Supply Chain"
+- industry: array of 1–3 short strings
+- impact: 1–2 sentence string
+- roi: short string (like "15% scrap reduction", "2x throughput")
+- summary: 2–3 sentence string
+- source: short string (e.g. "Internal project", "Vendor case study")
+- tip: 1–2 sentence practical tip
+- tags: array of 3–7 short strings
+- searchQ: short string suitable as a search query
+- smallShop: boolean
+- bigCompany: short string (company type, e.g. "Global OEM", "Tier-2 supplier")
+
+Rules:
+- Exactly ONE story per category listed above.
+- Use realistic but generic descriptions (no real company names).
+- Keep responses concise so that everything fits comfortably within ~1200 tokens.
+- Output ONLY the JSON array, no markdown, no commentary, no backticks.
+`;
+
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:4000,messages:[{role:"user",content:p}]})});
-    const d = await r.json();
-    if (!r.ok) return {statusCode:r.status,headers:C,body:JSON.stringify({error:d.error?.message||"API error"})};
-    const t = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-    const clean = t.replace(/```json/g,"").replace(/```/g,"").trim();
-    const a=clean.indexOf("["),z=clean.lastIndexOf("]");
-    if (a<0||z<0) return {statusCode:500,headers:C,body:JSON.stringify({error:"No JSON",preview:t.slice(0,200)})};
-    return {statusCode:200,headers:C,body:JSON.stringify({articles:JSON.parse(clean.slice(a,z+1)),generated:new Date().toISOString()})};
-  } catch(e) {
-    return {statusCode:500,headers:C,body:JSON.stringify({error:e.message})};
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1500,
+        temperature: 0.4,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        headers,
+        body: JSON.stringify({
+          error: data.error?.message || "Anthropic API error",
+          raw: data
+        })
+      };
+    }
+
+    const text = (data.content || [])
+      .filter(part => part.type === "text")
+      .map(part => part.text)
+      .join("")
+      .trim();
+
+    const cleaned = text
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+
+    if (start < 0 || end < 0) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "No JSON array found in model response",
+          preview: cleaned.slice(0, 300)
+        })
+      };
+    }
+
+    const jsonSlice = cleaned.slice(start, end + 1);
+
+    let articles;
+    try {
+      articles = JSON.parse(jsonSlice);
+    } catch (parseErr) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "Failed to parse JSON from model",
+          message: parseErr.message,
+          preview: jsonSlice.slice(0, 300)
+        })
+      };
+    }
+
+    if (!Array.isArray(articles) || articles.length !== 10) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "Model did not return exactly 10 stories",
+          count: Array.isArray(articles) ? articles.length : null
+        })
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        articles,
+        generated: new Date().toISOString()
+      })
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: "Server error calling Anthropic",
+        message: err.message
+      })
+    };
   }
 };
-The Netlify function logs show it runs for 24-32 seconds and uses 93-121 MB memory. The free tier timeout is 10 seconds. I am on a paid plan.
-
-My netlify.toml is:
-
-toml
-[build]
-  publish = "public"
-  functions = "netlify/functions"
-
-[functions]
-  node_bundler = "esbuild"
-
-[context.production.environment]
-  NODE_VERSION = "18"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-Problems:
-
-Single API call takes 24-32 seconds — too slow
-Parallel calls with Promise.all also fail
-max_tokens:4000 causes "Unexpected end of JSON input" — JSON gets cut off
-max_tokens:2000 also cuts off with 10 stories
-What I need: A working generate.js Netlify function that reliably returns 10 manufacturing AI stories as JSON within 10 seconds. The Anthropic model is claude-haiku-4-5-20251001. The ANTHROPIC_API_KEY is set as an environment variable in Netlify.
-
-Please give me a complete working solution.
-
-That gives Perplexity the full picture. Come back here with whatever solution it gives you and I'll help you implement it.
-
