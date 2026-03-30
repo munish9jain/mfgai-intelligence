@@ -1,48 +1,66 @@
 exports.handler = async function(event, context) {
-  const C = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
-  if (event.httpMethod === "OPTIONS") return {statusCode:200,headers:C,body:""};
-  const k = process.env.ANTHROPIC_API_KEY;
-  if (!k) return {statusCode:500,headers:C,body:JSON.stringify({error:"API key not configured"})};
+  const CORS = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
+  if (event.httpMethod === "OPTIONS") return {statusCode:200,headers:CORS,body:""};
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return {statusCode:500,headers:CORS,body:JSON.stringify({error:"API key not configured"})};
 
-  const cats1 = "Process Automation, Quality & Inspection, Inventory & Logistics, Predictive Maintenance, Scheduling & Planning";
-  const cats2 = "Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience";
+  const prompt1 = "Generate exactly 10 manufacturing AI stories, 2 each for these categories: Process Automation, Quality and Inspection, Inventory and Logistics, Predictive Maintenance, Scheduling and Planning. Include stories from Automotive, Food and Beverage, Plastics, Electronics industries. Mix Siemens, Rockwell, FANUC, Cognex, SAP with small shops under 100 employees. Title is the problem solved. Include ROI number. Return only a JSON array starting with [ and ending with ]. No markdown. Each item has: id, title, category, industry, impact, roi, summary, source, tip, tags, searchQ, smallShop, bigCompany";
 
-  const makePrompt = (cats, startId) => "Generate exactly 10 manufacturing AI stories, 2 per category: " + cats + ". Mix big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, ABB, Honeywell, Emerson, Aveva, Nvidia) with small manufacturers under 100 employees. At least 3 must be small shops. Always include stories from: Automotive, Food & Beverage, Pharma & Medical, Metals & Fabrication, Plastics & Compounding, Electronics, Oil Gas & Chemicals. Title must be the problem solved. Include specific ROI. Return ONLY raw JSON array, no markdown, no backticks. Start with [ end with ]. IDs start at " + startId + ". Each object: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(boolean),bigCompany(string or null)";
+  const prompt2 = "Generate exactly 10 manufacturing AI stories, 2 each for these categories: Plant Floor Optimization, Safety and Compliance, Workforce and Training, Energy and Sustainability, Supply Chain Resilience. Include stories from Metals, Pharma, Oil and Gas, Automotive industries. Mix ABB, Honeywell, Emerson, Aveva, Blue Yonder with small shops under 100 employees. Title is the problem solved. Include ROI number. Return only a JSON array starting with [ and ending with ]. No markdown. Each item has: id, title, category, industry, impact, roi, summary, source, tip, tags, searchQ, smallShop, bigCompany";
 
-  const callAPI = function(prompt) {
+  function callClaude(prompt) {
     return fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},
-      body: JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2500,messages:[{role:"user",content:prompt}]})
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2500,
+        messages: [{role: "user", content: prompt}]
+      })
     });
-  };
+  }
 
-  const extract = function(text) {
-    const clean = text.replace(/```json/g,"").replace(/```/g,"").trim();
-    const a = clean.indexOf("[");
-    const z = clean.lastIndexOf("]");
-    if (a < 0 || z < 0) return [];
-    try { return JSON.parse(clean.slice(a, z+1)); } catch(e) { return []; }
-  };
+  function parseArticles(text) {
+    var start = text.indexOf("[");
+    var end = text.lastIndexOf("]");
+    if (start === -1 || end === -1) return [];
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch(e) {
+      return [];
+    }
+  }
 
   try {
-    const results = await Promise.all([
-      callAPI(makePrompt(cats1, 1)),
-      callAPI(makePrompt(cats2, 11))
-    ]);
+    var r1 = await callClaude(prompt1);
+    var r2 = await callClaude(prompt2);
+    var d1 = await r1.json();
+    var d2 = await r2.json();
 
-    const jsons = await Promise.all([results[0].json(), results[1].json()]);
+    var text1 = "";
+    var text2 = "";
+    for (var i = 0; i < (d1.content || []).length; i++) {
+      if (d1.content[i].type === "text") text1 += d1.content[i].text;
+    }
+    for (var j = 0; j < (d2.content || []).length; j++) {
+      if (d2.content[j].type === "text") text2 += d2.content[j].text;
+    }
 
-    const t1 = (jsons[0].content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
-    const t2 = (jsons[1].content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
+    var articles1 = parseArticles(text1);
+    var articles2 = parseArticles(text2);
+    var all = articles1.concat(articles2);
 
-    const articles = extract(t1).concat(extract(t2));
+    if (all.length === 0) {
+      return {statusCode:500,headers:CORS,body:JSON.stringify({error:"Parse failed",preview1:text1.slice(0,200),preview2:text2.slice(0,200)})};
+    }
 
-    if (!articles.length) return {statusCode:500,headers:C,body:JSON.stringify({error:"No articles returned",t1:t1.slice(0,200),t2:t2.slice(0,200)})};
+    return {statusCode:200,headers:CORS,body:JSON.stringify({articles:all,generated:new Date().toISOString()})};
 
-    return {statusCode:200,headers:C,body:JSON.stringify({articles:articles,generated:new Date().toISOString()})};
-
-  } catch(e) {
-    return {statusCode:500,headers:C,body:JSON.stringify({error:e.message})};
+  } catch(err) {
+    return {statusCode:500,headers:CORS,body:JSON.stringify({error:err.message})};
   }
 };
