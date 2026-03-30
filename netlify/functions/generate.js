@@ -105,31 +105,4 @@ Rules:
       };
     }
 
-    const jsonSlice = cleaned.slice(start, end + 1);
-
-    let articles;
-    try {
-      articles = JSON.parse(jsonSlice);
-    } catch (e) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({
-          error: "Failed to parse JSON from model",
-          message: e.message,
-          preview: jsonSlice.slice(0, 200)
-        })
-      };
-    }
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        articles,
-        generated: new Date().toISOString()
-      })
-    };
-  } catch (err) {
-    return {
-      st
+    const jsonSlice = 
