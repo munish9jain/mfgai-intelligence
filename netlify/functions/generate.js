@@ -8,7 +8,7 @@ exports.handler = async function(event, context) {
   const cats2 = "Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience";
 
   const makePrompt = (cats, startId) =>
-    `Generate exactly 10 manufacturing AI stories, 2 per category: ${cats}. Mix big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, ABB, Honeywell, Emerson, Aveva, Nvidia) with small manufacturers under 100 employees. At least 3 must be small shops. Title=problem solved. Include specific ROI. Return ONLY JSON array, no markdown. IDs start at ${startId}. Each object: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(boolean),bigCompany(string or null)`;
+    `Generate exactly 10 manufacturing AI stories, 2 per category: ${cats}. Mix big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, ABB, Honeywell, Emerson, Aveva, Nvidia) with small manufacturers under 100 employees. At least 3 must be small shops. Title=problem solved. Include specific ROI. IDs start at ${startId}. Each object: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(boolean),bigCompany(string or null). IMPORTANT: Return ONLY the raw JSON array. Do not use markdown. Do not use backticks. Start your response with [ and end with ]`;
 
   const callAPI = (prompt) => fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
@@ -17,9 +17,10 @@ exports.handler = async function(event, context) {
   });
 
   const extract = (text) => {
-    const a = text.indexOf("["), z = text.lastIndexOf("]");
+    const clean = text.replace(/```json/g,"").replace(/```/g,"").trim();
+    const a = clean.indexOf("["), z = clean.lastIndexOf("]");
     if (a < 0 || z < 0) return [];
-    try { return JSON.parse(text.slice(a, z+1)); } catch(e) { return []; }
+    try { return JSON.parse(clean.slice(a, z+1)); } catch(e) { return []; }
   };
 
   try {
@@ -35,7 +36,10 @@ exports.handler = async function(event, context) {
 
     const articles = [...extract(t1), ...extract(t2)];
 
-    if (!articles.length) return {statusCode:500,headers:C,body:JSON.stringify({error:"No articles parsed",r1:t1.slice(0,100),r2:t2.slice(0,100)})};
+    if (!articles.length) return {
+      statusCode:500,headers:C,
+      body:JSON.stringify({error:"No articles parsed",t1:t1.slice(0,150),t2:t2.slice(0,150)})
+    };
 
     return {statusCode:200,headers:C,body:JSON.stringify({articles,generated:new Date().toISOString()})};
 
