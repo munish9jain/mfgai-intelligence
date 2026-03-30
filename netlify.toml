@@ -4,6 +4,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  timeout = 26
+
+[context.production.environment]
+  NODE_VERSION = "18"
 
 [[headers]]
   for = "/*"
