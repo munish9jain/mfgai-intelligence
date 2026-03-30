@@ -10,7 +10,7 @@ exports.handler = async function(event, context) {
     const r = await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2000,messages:[{role:"user",content:p}]})
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:3000,messages:[{role:"user",content:p}]})
     });
     const d = await r.json();
     if (!r.ok) return {statusCode:r.status,headers:C,body:JSON.stringify({error:d.error?.message||"API error"})};
