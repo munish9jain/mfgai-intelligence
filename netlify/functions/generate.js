@@ -88,12 +88,47 @@ Rules:
       .join("")
       .trim();
 
-    // Just send the text straight through; front‑end will JSON.parse it
+    const cleaned = text
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+
+    if (start < 0 || end < 0) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "No JSON array found in model response",
+          preview: cleaned.slice(0, 200)
+        })
+      };
+    }
+
+    const jsonSlice = cleaned.slice(start, end + 1);
+    let articles;
+
+    try {
+      articles = JSON.parse(jsonSlice);
+    } catch (e) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "Failed to parse JSON from model",
+          message: e.message,
+          preview: jsonSlice.slice(0, 200)
+        })
+      };
+    }
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        articles: text,
+        articles,
         generated: new Date().toISOString()
       })
     };
