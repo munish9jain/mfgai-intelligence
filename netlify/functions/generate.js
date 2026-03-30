@@ -8,7 +8,8 @@ exports.handler = async function(event, context) {
   const cats2 = "Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience";
 
   const makePrompt = (cats, startId) =>
-    `Generate exactly 10 manufacturing AI stories, 2 per category: ${cats}. Mix big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, ABB, Honeywell, Emerson, Aveva, Nvidia) with small manufacturers under 100 employees. At least 3 must be small shops. Title=problem solved. Include specific ROI. IDs start at ${startId}. Each object: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(boolean),bigCompany(string or null). IMPORTANT: Return ONLY the raw JSON array. Do not use markdown. Do not use backticks. Start your response with [ and end with ]`;
+    `Generate exactly 10 manufacturing AI stories, 2 per category: ${cats}. Mix big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, ABB, Honeywell, Emerson, Aveva, Nvidia) with small manufacturers under 100 employees. At least 3 must be small shops. Always include at least 1 story from each of these industries: Automotive, Food & Beverage, Pharma & Medical, Metals & Fabrication, Plastics & Compounding, Electronics, Oil Gas & Chemicals.
+
 
   const callAPI = (prompt) => fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
