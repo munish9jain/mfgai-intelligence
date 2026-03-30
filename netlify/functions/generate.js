@@ -4,13 +4,12 @@ exports.handler = async function(event, context) {
   const k = process.env.ANTHROPIC_API_KEY;
   if (!k) return {statusCode:500,headers:C,body:JSON.stringify({error:"API key not configured"})};
 
-  const p = "Generate 10 manufacturing AI stories, 1 per category: Process Automation, Quality & Inspection, Inventory & Logistics, Predictive Maintenance, Scheduling & Planning, Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience. Include small manufacturers. Title=problem solved. Include ROI. Return ONLY JSON array. Each: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(2 sentences),source,tip,tags(array),searchQ,smallShop(boolean)";
-
+  const p = "Generate 20 manufacturing AI stories, 2 per category: Process Automation, Quality & Inspection, Inventory & Logistics, Predictive Maintenance, Scheduling & Planning, Plant Floor Optimization, Safety & Compliance, Workforce & Training, Energy & Sustainability, Supply Chain Resilience. Mix of big companies (Siemens, Rockwell, FANUC, Cognex, SAP, Blue Yonder, SKF, Augury, Microsoft, Google, Nvidia, ABB, Honeywell, Emerson, AspenTech, Aveva) and small manufacturers under 100 employees. At least 6 must be small shops. Title=problem solved. Include specific ROI numbers. Return ONLY JSON array. Each: id,title,category,industry(array),impact(High/Medium/Low),roi,summary(3 sentences),source,tip,tags(array),searchQ,smallShop(boolean),bigCompany(string or null)";
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:3000,messages:[{role:"user",content:p}]})
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:4000,messages:[{role:"user",content:p}]})
     });
     const d = await r.json();
     if (!r.ok) return {statusCode:r.status,headers:C,body:JSON.stringify({error:d.error?.message||"API error"})};
