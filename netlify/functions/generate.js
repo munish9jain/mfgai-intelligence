@@ -4,13 +4,47 @@ exports.handler = async function (event, context) {
     "Content-Type": "application/json"
   };
 
-  // Simple test function to confirm syntax is OK
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({
-      ok: true,
-      message: "Test function is working"
-    })
-  };
-};
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: "API key not configured" })
+    };
+  }
+
+  const prompt = `
+Return ONLY a valid JSON array of EXACTLY 10 VERY SHORT objects.
+
+Each object MUST have:
+- id: integer 1–10
+- title: <= 40 chars
+- category: one of:
+  "Process Automation",
+  "Quality Inspection",
+  "Inventory Logistics",
+  "Predictive Maintenance",
+  "Scheduling Planning",
+  "Plant Optimization",
+  "Safety Compliance",
+  "Workforce Training",
+  "Energy Sustainability",
+  "Supply Chain"
+- industry: array of 1–2 very short strings
+- impact: ONE sentence <= 15 words
+- roi: short string like "15% scrap reduction"
+- summary: ONE sentence <= 20 words
+- source: very short string
+- tip: ONE sentence <= 15 words
+- tags: array of 3 very short strings
+- searchQ: very short string
+- smallShop: boolean
+- bigCompany: very short string.
+
+Rules:
+- Exactly ONE story per category above.
+- Keep ALL text extremely short.
